@@ -13,7 +13,6 @@ The script preserves the HTML structure and data content.
 """
 
 from html.parser import HTMLParser
-from html.entities import name2codepoint
 import sys
 
 
@@ -92,10 +91,6 @@ class HTMLCleaner(HTMLParser):
         
         # Skip end tags for removed tags
         if tag in self.REMOVE_WITH_CONTENT or tag in self.MEDIA_TAGS:
-            return
-        
-        # Skip link tags
-        if tag == 'link':
             return
         
         self.output.append(f'</{tag}>')

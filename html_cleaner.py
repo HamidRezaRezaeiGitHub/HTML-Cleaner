@@ -19,11 +19,11 @@ import sys
 class HTMLCleaner(HTMLParser):
     """HTML Parser that removes unwanted tags and attributes."""
     
-    # Tags to completely remove (including their content)
-    REMOVE_TAGS = {'style', 'script'}
+    # Self-closing media tags to remove (no content)
+    SELF_CLOSING_MEDIA_TAGS = {'img', 'source', 'track', 'embed'}
     
-    # Media tags to remove
-    MEDIA_TAGS = {'img', 'video', 'audio', 'source', 'track', 'embed', 'object', 'iframe'}
+    # Media tags with content to remove (including their content)
+    MEDIA_TAGS_WITH_CONTENT = {'video', 'audio', 'iframe', 'object'}
     
     # Tags that should be removed along with their content
     REMOVE_WITH_CONTENT = {'style', 'script'}
@@ -44,8 +44,12 @@ class HTMLCleaner(HTMLParser):
             self.current_skip_tag = tag
             return
         
-        # Skip media tags and their content
-        if tag in self.MEDIA_TAGS:
+        # Skip self-closing media tags (no need to track content)
+        if tag in self.SELF_CLOSING_MEDIA_TAGS:
+            return
+        
+        # Skip media tags with content and track to skip their content
+        if tag in self.MEDIA_TAGS_WITH_CONTENT:
             self.skip_media_content = True
             self.current_media_tag = tag
             return
@@ -90,7 +94,7 @@ class HTMLCleaner(HTMLParser):
             return
         
         # Skip end tags for removed tags
-        if tag in self.REMOVE_WITH_CONTENT or tag in self.MEDIA_TAGS:
+        if tag in self.REMOVE_WITH_CONTENT or tag in self.MEDIA_TAGS_WITH_CONTENT or tag in self.SELF_CLOSING_MEDIA_TAGS:
             return
         
         self.output.append(f'</{tag}>')
@@ -102,7 +106,7 @@ class HTMLCleaner(HTMLParser):
     
     def handle_comment(self, data):
         """Handle HTML comments."""
-        if not self.skip_content:
+        if not self.skip_content and not self.skip_media_content:
             self.output.append(f'<!--{data}-->')
     
     def handle_decl(self, decl):
@@ -111,8 +115,8 @@ class HTMLCleaner(HTMLParser):
     
     def handle_startendtag(self, tag, attrs):
         """Handle self-closing tags."""
-        # Skip media tags
-        if tag in self.MEDIA_TAGS:
+        # Skip self-closing media tags
+        if tag in self.SELF_CLOSING_MEDIA_TAGS or tag in self.MEDIA_TAGS_WITH_CONTENT:
             return
         
         # Skip link tags with rel="stylesheet"

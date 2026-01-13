@@ -64,12 +64,12 @@ class HTMLCleaner(HTMLParser):
         if attrs:
             attrs_str = ' '.join(f'{attr}="{html.escape(value, quote=True)}"' for attr, value in attrs)
             if self_closing:
-                return f'<{tag} {attrs_str} />'
+                return f'<{tag} {attrs_str}/>'
             else:
                 return f'<{tag} {attrs_str}>'
         else:
             if self_closing:
-                return f'<{tag} />'
+                return f'<{tag}/>'
             else:
                 return f'<{tag}>'
     

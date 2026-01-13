@@ -37,6 +37,42 @@ class HTMLCleaner(HTMLParser):
         self.skip_media_content = False
         self.current_media_tag = None
     
+    def _is_stylesheet_link(self, tag, attrs):
+        """Check if a link tag is a stylesheet link."""
+        if tag == 'link':
+            for attr, value in attrs:
+                if attr == 'rel' and value == 'stylesheet':
+                    return True
+        return False
+    
+    def _clean_attributes(self, attrs):
+        """Clean attributes by removing style and href attributes."""
+        cleaned_attrs = []
+        for attr, value in attrs:
+            # Remove style attributes
+            if attr == 'style':
+                continue
+            # Remove href attributes
+            if attr == 'href':
+                continue
+            # Keep all other attributes
+            cleaned_attrs.append((attr, value))
+        return cleaned_attrs
+    
+    def _build_tag_string(self, tag, attrs, self_closing=False):
+        """Build an HTML tag string with properly escaped attributes."""
+        if attrs:
+            attrs_str = ' '.join(f'{attr}="{html.escape(value, quote=True)}"' for attr, value in attrs)
+            if self_closing:
+                return f'<{tag} {attrs_str} />'
+            else:
+                return f'<{tag} {attrs_str}>'
+        else:
+            if self_closing:
+                return f'<{tag} />'
+            else:
+                return f'<{tag}>'
+    
     def handle_starttag(self, tag, attrs):
         """Handle opening tags."""
         # Skip script and style tags completely
@@ -53,29 +89,12 @@ class HTMLCleaner(HTMLParser):
             return
         
         # Skip link tags with rel="stylesheet"
-        if tag == 'link':
-            for attr, value in attrs:
-                if attr == 'rel' and value == 'stylesheet':
-                    return
+        if self._is_stylesheet_link(tag, attrs):
+            return
         
-        # Clean attributes
-        cleaned_attrs = []
-        for attr, value in attrs:
-            # Remove style attributes
-            if attr == 'style':
-                continue
-            # Remove href attributes
-            if attr == 'href':
-                continue
-            # Keep all other attributes
-            cleaned_attrs.append((attr, value))
-        
-        # Build the tag with properly escaped attribute values
-        if cleaned_attrs:
-            attrs_str = ' '.join(f'{attr}="{html.escape(value, quote=True)}"' for attr, value in cleaned_attrs)
-            self.output.append(f'<{tag} {attrs_str}>')
-        else:
-            self.output.append(f'<{tag}>')
+        # Clean attributes and build the tag
+        cleaned_attrs = self._clean_attributes(attrs)
+        self.output.append(self._build_tag_string(tag, cleaned_attrs))
     
     def handle_endtag(self, tag):
         """Handle closing tags."""
@@ -118,29 +137,12 @@ class HTMLCleaner(HTMLParser):
             return
         
         # Skip link tags with rel="stylesheet"
-        if tag == 'link':
-            for attr, value in attrs:
-                if attr == 'rel' and value == 'stylesheet':
-                    return
+        if self._is_stylesheet_link(tag, attrs):
+            return
         
-        # Clean attributes
-        cleaned_attrs = []
-        for attr, value in attrs:
-            # Remove style attributes
-            if attr == 'style':
-                continue
-            # Remove href attributes
-            if attr == 'href':
-                continue
-            # Keep all other attributes
-            cleaned_attrs.append((attr, value))
-        
-        # Build the self-closing tag with properly escaped attribute values
-        if cleaned_attrs:
-            attrs_str = ' '.join(f'{attr}="{html.escape(value, quote=True)}"' for attr, value in cleaned_attrs)
-            self.output.append(f'<{tag} {attrs_str} />')
-        else:
-            self.output.append(f'<{tag} />')
+        # Clean attributes and build the self-closing tag
+        cleaned_attrs = self._clean_attributes(attrs)
+        self.output.append(self._build_tag_string(tag, cleaned_attrs, self_closing=True))
     
     def get_output(self):
         """Return the cleaned HTML."""

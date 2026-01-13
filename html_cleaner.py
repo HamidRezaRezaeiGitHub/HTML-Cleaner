@@ -14,19 +14,20 @@ The script preserves the HTML structure and data content.
 
 from html.parser import HTMLParser
 import sys
+import html
 
 
 class HTMLCleaner(HTMLParser):
     """HTML Parser that removes unwanted tags and attributes."""
     
-    # Self-closing media tags to remove (no content)
-    SELF_CLOSING_MEDIA_TAGS = {'img', 'source', 'track', 'embed'}
-    
-    # Media tags with content to remove (including their content)
-    MEDIA_TAGS_WITH_CONTENT = {'video', 'audio', 'iframe', 'object'}
+    # Media tags to remove (self-closing and with content)
+    MEDIA_TAGS = {'img', 'video', 'audio', 'source', 'track', 'embed', 'object', 'iframe'}
     
     # Tags that should be removed along with their content
     REMOVE_WITH_CONTENT = {'style', 'script'}
+    
+    # Media tags that typically have content (not self-closing)
+    MEDIA_TAGS_WITH_CONTENT = {'video', 'audio', 'iframe', 'object'}
     
     def __init__(self):
         super().__init__()
@@ -44,14 +45,11 @@ class HTMLCleaner(HTMLParser):
             self.current_skip_tag = tag
             return
         
-        # Skip self-closing media tags (no need to track content)
-        if tag in self.SELF_CLOSING_MEDIA_TAGS:
-            return
-        
-        # Skip media tags with content and track to skip their content
-        if tag in self.MEDIA_TAGS_WITH_CONTENT:
-            self.skip_media_content = True
-            self.current_media_tag = tag
+        # Skip media tags - if they have content, track to skip it
+        if tag in self.MEDIA_TAGS:
+            if tag in self.MEDIA_TAGS_WITH_CONTENT:
+                self.skip_media_content = True
+                self.current_media_tag = tag
             return
         
         # Skip link tags with rel="stylesheet"
@@ -72,9 +70,9 @@ class HTMLCleaner(HTMLParser):
             # Keep all other attributes
             cleaned_attrs.append((attr, value))
         
-        # Build the tag
+        # Build the tag with properly escaped attribute values
         if cleaned_attrs:
-            attrs_str = ' '.join(f'{attr}="{value}"' for attr, value in cleaned_attrs)
+            attrs_str = ' '.join(f'{attr}="{html.escape(value, quote=True)}"' for attr, value in cleaned_attrs)
             self.output.append(f'<{tag} {attrs_str}>')
         else:
             self.output.append(f'<{tag}>')
@@ -94,7 +92,7 @@ class HTMLCleaner(HTMLParser):
             return
         
         # Skip end tags for removed tags
-        if tag in self.REMOVE_WITH_CONTENT or tag in self.MEDIA_TAGS_WITH_CONTENT or tag in self.SELF_CLOSING_MEDIA_TAGS:
+        if tag in self.REMOVE_WITH_CONTENT or tag in self.MEDIA_TAGS:
             return
         
         self.output.append(f'</{tag}>')
@@ -115,8 +113,8 @@ class HTMLCleaner(HTMLParser):
     
     def handle_startendtag(self, tag, attrs):
         """Handle self-closing tags."""
-        # Skip self-closing media tags
-        if tag in self.SELF_CLOSING_MEDIA_TAGS or tag in self.MEDIA_TAGS_WITH_CONTENT:
+        # Skip media tags
+        if tag in self.MEDIA_TAGS:
             return
         
         # Skip link tags with rel="stylesheet"
@@ -137,9 +135,9 @@ class HTMLCleaner(HTMLParser):
             # Keep all other attributes
             cleaned_attrs.append((attr, value))
         
-        # Build the self-closing tag
+        # Build the self-closing tag with properly escaped attribute values
         if cleaned_attrs:
-            attrs_str = ' '.join(f'{attr}="{value}"' for attr, value in cleaned_attrs)
+            attrs_str = ' '.join(f'{attr}="{html.escape(value, quote=True)}"' for attr, value in cleaned_attrs)
             self.output.append(f'<{tag} {attrs_str} />')
         else:
             self.output.append(f'<{tag} />')

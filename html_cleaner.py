@@ -20,14 +20,17 @@ import html
 class HTMLCleaner(HTMLParser):
     """HTML Parser that removes unwanted tags and attributes."""
     
-    # Media tags to remove (self-closing and with content)
-    MEDIA_TAGS = {'img', 'video', 'audio', 'source', 'track', 'embed', 'object', 'iframe'}
-    
-    # Tags that should be removed along with their content
-    REMOVE_WITH_CONTENT = {'style', 'script'}
+    # Media tags that are self-closing
+    SELF_CLOSING_MEDIA_TAGS = {'img', 'source', 'track', 'embed'}
     
     # Media tags that typically have content (not self-closing)
     MEDIA_TAGS_WITH_CONTENT = {'video', 'audio', 'iframe', 'object'}
+    
+    # Media tags to remove (both self-closing and with content)
+    MEDIA_TAGS = SELF_CLOSING_MEDIA_TAGS | MEDIA_TAGS_WITH_CONTENT
+    
+    # Tags that should be removed along with their content
+    REMOVE_WITH_CONTENT = {'style', 'script'}
     
     def __init__(self):
         super().__init__()
@@ -62,7 +65,10 @@ class HTMLCleaner(HTMLParser):
     def _build_tag_string(self, tag, attrs, self_closing=False):
         """Build an HTML tag string with properly escaped attributes."""
         if attrs:
-            attrs_str = ' '.join(f'{attr}="{html.escape(value, quote=True)}"' for attr, value in attrs)
+            attrs_str = ' '.join(
+                f'{attr}="{html.escape("" if value is None else str(value), quote=True)}"'
+                for attr, value in attrs
+            )
             if self_closing:
                 return f'<{tag} {attrs_str}/>'
             else:
@@ -175,10 +181,10 @@ def clean_html(input_file, output_file):
         return True
     
     except FileNotFoundError as e:
-        print(f"Error: File not found - {e}")
+        sys.stderr.write(f"Error: File not found - {e}\n")
         return False
     except Exception as e:
-        print(f"Error: {e}")
+        sys.stderr.write(f"Error: {e}\n")
         return False
 
 

@@ -1,3 +1,7 @@
+# HTML input/output files
+input.html
+output.html
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

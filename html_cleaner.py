@@ -46,7 +46,7 @@ class HTMLCleaner(HTMLParser):
     METADATA_TAGS = {'meta', 'base', 'link'}
     
     # Tags to unwrap (remove tag but keep inner content)
-    UNWRAP_TAGS = {'a'}
+    UNWRAP_TAGS = {'a', 'span'}
     
     def __init__(self):
         super().__init__()
@@ -275,6 +275,54 @@ class HTMLCleaner(HTMLParser):
         return ''.join(self.output)
 
 
+def remove_empty_tags(html_content):
+    """
+    Remove empty HTML tags recursively until no more can be removed.
+    
+    Args:
+        html_content (str): HTML content to clean
+        
+    Returns:
+        str: HTML content with empty tags removed
+    """
+    import re
+    
+    # Tags that should be removed if empty
+    # Keep structural tags like html, head, body even if empty
+    removable_tags = ['div', 'span', 'p', 'li', 'ul', 'ol', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                     'section', 'article', 'aside', 'main', 'figure', 'figcaption',
+                     'strong', 'em', 'b', 'i', 'u', 'small', 'mark', 'del', 'ins',
+                     'sub', 'sup', 'blockquote', 'pre', 'code', 'kbd', 'samp', 'var',
+                     'abbr', 'address', 'cite', 'dfn', 'time', 'dd', 'dt', 'dl']
+    
+    # Keep running until no more changes
+    max_iterations = 50  # Prevent infinite loops
+    iteration = 0
+    
+    while iteration < max_iterations:
+        original = html_content
+        
+        # Remove tags that are completely empty: <tag></tag> or <tag> </tag> or <tag>\n</tag>
+        for tag in removable_tags:
+            # Match opening tag, optional whitespace, closing tag
+            pattern = rf'<{tag}[^>]*>\s*</{tag}>'
+            html_content = re.sub(pattern, '', html_content)
+        
+        # Remove orphaned closing tags more simply
+        # Just remove any remaining closing tags that are surrounded by whitespace/newlines
+        # This is a simpler approach that catches most orphaned tags
+        pattern = r'^\s*</[^>]+>\s*$'
+        html_content = re.sub(pattern, '', html_content, flags=re.MULTILINE)
+        
+        # If nothing changed, we're done
+        if html_content == original:
+            break
+        
+        iteration += 1
+    
+    return html_content
+
+
 def clean_html(input_file, output_file):
     """
     Clean HTML from input file and write to output file.
@@ -293,7 +341,24 @@ def clean_html(input_file, output_file):
         cleaner.feed(html_content)
         cleaned_html = cleaner.get_output()
         
+        # Post-processing: Remove empty tags
+        cleaned_html = remove_empty_tags(cleaned_html)
+        
         # Remove blank lines
+        lines = cleaned_html.splitlines()
+        non_blank_lines = [line for line in lines if line.strip()]
+        cleaned_html = '\n'.join(non_blank_lines)
+        
+        # Consolidate multiple spaces into single space (preserve line structure)
+        import re
+        cleaned_html = re.sub(r' +', ' ', cleaned_html)
+        
+        # Add basic formatting: put each tag on its own line for readability
+        # This makes it easier for AI to parse while keeping it clean
+        cleaned_html = re.sub(r'>([^<\n])', r'>\n\1', cleaned_html)  # Newline after > if text follows
+        cleaned_html = re.sub(r'([^>\n])<', r'\1\n<', cleaned_html)  # Newline before < if text precedes
+        
+        # Remove any resulting blank lines again
         lines = cleaned_html.splitlines()
         non_blank_lines = [line for line in lines if line.strip()]
         cleaned_html = '\n'.join(non_blank_lines)

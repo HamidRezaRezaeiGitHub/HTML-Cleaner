@@ -1,0 +1,204 @@
+#!/usr/bin/env python3
+"""
+HTML Cleaner Script
+
+This script purifies HTML content by removing:
+- All style-related tags (style, link[rel="stylesheet"])
+- All style attributes from HTML elements
+- All script-related tags
+- All href attributes from links
+- All media tags (img, video, audio, source, track, embed, object, iframe)
+
+The script preserves the HTML structure and data content.
+"""
+
+from html.parser import HTMLParser
+import sys
+import html
+
+
+class HTMLCleaner(HTMLParser):
+    """HTML Parser that removes unwanted tags and attributes."""
+    
+    # Media tags that are self-closing
+    SELF_CLOSING_MEDIA_TAGS = {'img', 'source', 'track', 'embed'}
+    
+    # Media tags that typically have content (not self-closing)
+    MEDIA_TAGS_WITH_CONTENT = {'video', 'audio', 'iframe', 'object'}
+    
+    # Media tags to remove (both self-closing and with content)
+    MEDIA_TAGS = SELF_CLOSING_MEDIA_TAGS | MEDIA_TAGS_WITH_CONTENT
+    
+    # Tags that should be removed along with their content
+    REMOVE_WITH_CONTENT = {'style', 'script'}
+    
+    def __init__(self):
+        super().__init__()
+        self.output = []
+        self.skip_content = False
+        self.current_skip_tag = None
+        self.skip_media_content = False
+        self.current_media_tag = None
+    
+    def _is_stylesheet_link(self, tag, attrs):
+        """Check if a link tag is a stylesheet link."""
+        if tag == 'link':
+            for attr, value in attrs:
+                if attr == 'rel' and value == 'stylesheet':
+                    return True
+        return False
+    
+    def _clean_attributes(self, attrs):
+        """Clean attributes by removing style and href attributes."""
+        cleaned_attrs = []
+        for attr, value in attrs:
+            # Remove style attributes
+            if attr == 'style':
+                continue
+            # Remove href attributes
+            if attr == 'href':
+                continue
+            # Keep all other attributes
+            cleaned_attrs.append((attr, value))
+        return cleaned_attrs
+    
+    def _build_tag_string(self, tag, attrs, self_closing=False):
+        """Build an HTML tag string with properly escaped attributes."""
+        if attrs:
+            attrs_str = ' '.join(
+                f'{attr}="{html.escape("" if value is None else str(value), quote=True)}"'
+                for attr, value in attrs
+            )
+            if self_closing:
+                return f'<{tag} {attrs_str}/>'
+            else:
+                return f'<{tag} {attrs_str}>'
+        else:
+            if self_closing:
+                return f'<{tag}/>'
+            else:
+                return f'<{tag}>'
+    
+    def handle_starttag(self, tag, attrs):
+        """Handle opening tags."""
+        # Skip script and style tags completely
+        if tag in self.REMOVE_WITH_CONTENT:
+            self.skip_content = True
+            self.current_skip_tag = tag
+            return
+        
+        # Skip media tags - if they have content, track to skip it
+        if tag in self.MEDIA_TAGS:
+            if tag in self.MEDIA_TAGS_WITH_CONTENT:
+                self.skip_media_content = True
+                self.current_media_tag = tag
+            return
+        
+        # Skip link tags with rel="stylesheet"
+        if self._is_stylesheet_link(tag, attrs):
+            return
+        
+        # Clean attributes and build the tag
+        cleaned_attrs = self._clean_attributes(attrs)
+        self.output.append(self._build_tag_string(tag, cleaned_attrs))
+    
+    def handle_endtag(self, tag):
+        """Handle closing tags."""
+        # Stop skipping content after closing tag
+        if self.skip_content and tag == self.current_skip_tag:
+            self.skip_content = False
+            self.current_skip_tag = None
+            return
+        
+        # Stop skipping media content after closing tag
+        if self.skip_media_content and tag == self.current_media_tag:
+            self.skip_media_content = False
+            self.current_media_tag = None
+            return
+        
+        # Skip end tags for removed tags
+        if tag in self.REMOVE_WITH_CONTENT or tag in self.MEDIA_TAGS:
+            return
+        
+        self.output.append(f'</{tag}>')
+    
+    def handle_data(self, data):
+        """Handle text content."""
+        if not self.skip_content and not self.skip_media_content:
+            self.output.append(data)
+    
+    def handle_comment(self, data):
+        """Handle HTML comments."""
+        if not self.skip_content and not self.skip_media_content:
+            self.output.append(f'<!--{data}-->')
+    
+    def handle_decl(self, decl):
+        """Handle DOCTYPE declarations."""
+        self.output.append(f'<!{decl}>')
+    
+    def handle_startendtag(self, tag, attrs):
+        """Handle self-closing tags."""
+        # Skip media tags
+        if tag in self.MEDIA_TAGS:
+            return
+        
+        # Skip link tags with rel="stylesheet"
+        if self._is_stylesheet_link(tag, attrs):
+            return
+        
+        # Clean attributes and build the self-closing tag
+        cleaned_attrs = self._clean_attributes(attrs)
+        self.output.append(self._build_tag_string(tag, cleaned_attrs, self_closing=True))
+    
+    def get_output(self):
+        """Return the cleaned HTML."""
+        return ''.join(self.output)
+
+
+def clean_html(input_file, output_file):
+    """
+    Clean HTML from input file and write to output file.
+    
+    Args:
+        input_file (str): Path to input HTML file
+        output_file (str): Path to output HTML file
+    """
+    try:
+        # Read input HTML
+        with open(input_file, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        
+        # Clean the HTML
+        cleaner = HTMLCleaner()
+        cleaner.feed(html_content)
+        cleaned_html = cleaner.get_output()
+        
+        # Write output HTML
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(cleaned_html)
+        
+        print(f"Successfully cleaned HTML from '{input_file}' to '{output_file}'")
+        return True
+    
+    except FileNotFoundError as e:
+        sys.stderr.write(f"Error: File not found - {e}\n")
+        return False
+    except Exception as e:
+        sys.stderr.write(f"Error: {e}\n")
+        return False
+
+
+if __name__ == "__main__":
+    # Default input and output files
+    input_file = "input.html"
+    output_file = "output.html"
+    
+    # Allow command-line arguments to override defaults
+    if len(sys.argv) >= 2:
+        input_file = sys.argv[1]
+    if len(sys.argv) >= 3:
+        output_file = sys.argv[2]
+    
+    # Clean the HTML
+    success = clean_html(input_file, output_file)
+    sys.exit(0 if success else 1)
